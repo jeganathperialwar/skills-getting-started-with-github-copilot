@@ -1,4 +1,5 @@
 document.addEventListener("DOMContentLoaded", () => {
+  console.debug("app.js loaded, DOM ready");
   const activitiesList = document.getElementById("activities-list");
   const activitySelect = document.getElementById("activity");
   const signupForm = document.getElementById("signup-form");
@@ -7,8 +8,17 @@ document.addEventListener("DOMContentLoaded", () => {
   // Function to fetch activities from API
   async function fetchActivities() {
     try {
-      const response = await fetch("/activities");
+      console.debug("fetching /activities (absolute)");
+      let response = await fetch("/activities");
+      // fallback to relative path if absolute fails (useful when opening file://)
+      if (!response.ok) {
+        console.debug("absolute /activities returned", response.status, "trying relative 'activities'");
+        response = await fetch("activities");
+      }
+
+      console.debug("activities response status:", response.status);
       const activities = await response.json();
+      console.debug("activities payload:", activities);
 
       // Clear loading message
       activitiesList.innerHTML = "";
@@ -23,7 +33,20 @@ document.addEventListener("DOMContentLoaded", () => {
         const activityCard = document.createElement("div");
         activityCard.className = "activity-card";
 
-        const spotsLeft = details.max_participants - (details.participants ? details.participants.length : 0);
+        // Normalize participants into an array (support array, object, comma string)
+        let participants = [];
+        if (Array.isArray(details.participants)) {
+          participants = details.participants;
+        } else if (details.participants && typeof details.participants === "object") {
+          participants = Object.values(details.participants);
+        } else if (typeof details.participants === "string") {
+          participants = details.participants
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+        }
+
+        const spotsLeft = details.max_participants - (participants ? participants.length : 0);
 
         // Build card DOM (use elements to ensure participants are visible)
         const title = document.createElement("h4");
@@ -45,13 +68,12 @@ document.addEventListener("DOMContentLoaded", () => {
         participantsLabel.innerHTML = "<strong>Participants:</strong>";
         participantsSection.appendChild(participantsLabel);
 
-        if (details.participants && details.participants.length > 0) {
+        if (participants && participants.length > 0) {
           const ul = document.createElement("ul");
           ul.className = "participants-list";
-          details.participants.forEach((p) => {
+          participants.forEach((p) => {
             const li = document.createElement("li");
             li.className = "participant-item";
-            // Support strings or objects for participant entries
             const text = typeof p === "string" ? p : (p.name || p.email || JSON.stringify(p));
             li.textContent = text;
             ul.appendChild(li);
@@ -100,6 +122,7 @@ document.addEventListener("DOMContentLoaded", () => {
       );
 
       const result = await response.json();
+      console.debug("signup response:", response.status, result);
 
       if (response.ok) {
         messageDiv.textContent = result.message;
